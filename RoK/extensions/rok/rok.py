@@ -63,7 +63,7 @@ async def linkme(ctx: lightbulb.SlashContext) -> None:
     #     await ctx.respond("Please provide proper governor ID")
     #     return
 
-    username = await rok_db.get_discord_id(ctx.author.id, governor_id, "general")
+    username = rok_db.get_discord_id(ctx.author.id, governor_id, "general")
 
     if username is None:
         await ctx.respond(
