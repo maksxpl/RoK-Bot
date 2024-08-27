@@ -28,7 +28,7 @@ class CustomMenu(menu.Menu):
         return True
 
 
-class Linkme_AccountConfirmationScreen(menu.Screen):
+class LinkmeScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
@@ -52,7 +52,7 @@ class Linkme_AccountConfirmationScreen(menu.Screen):
     async def yes_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(Linkme_AccountTypeSelectionScreen(self.menu, self.gid))
+        await self.menu.push(LinkmeAccontSelectionScreen(self.menu, self.gid))
 
     @menu.button(label="No", style=hikari.ButtonStyle.DANGER)
     async def no_button(self, ctx: miru.ViewContext, button: miru.Button) -> None:
@@ -62,7 +62,7 @@ class Linkme_AccountConfirmationScreen(menu.Screen):
         self.menu.stop()
 
 
-class Linkme_AccountTypeSelectionScreen(menu.Screen):
+class LinkmeAccontSelectionScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
@@ -82,7 +82,7 @@ class Linkme_AccountTypeSelectionScreen(menu.Screen):
         )
         self.menu.stop()
 
-    @menu.button(label="2nd Account", style=hikari.ButtonStyle.SECONDARY)
+    @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
     async def second_acc_button(
         self, ctx: miru.ViewContext, button: miru.Button
     ) -> None:
@@ -101,7 +101,7 @@ class Linkme_AccountTypeSelectionScreen(menu.Screen):
         self.menu.stop()
 
 
-class Mystats_CategorySelectionScreen(menu.Screen):
+class MystatsScreen(menu.Screen):
     def __init__(self, menu: menu.Menu) -> None:
         super().__init__(menu)
 
@@ -112,16 +112,16 @@ class Mystats_CategorySelectionScreen(menu.Screen):
     async def general_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(Mystats_AccountTypeSelectionScreen(self.menu, "general"))
+        await self.menu.push(MystatsTypeSelectionScreen(self.menu, "general"))
 
     @menu.button(label="KvK", style=hikari.ButtonStyle.SUCCESS)
     async def kvk_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(Mystats_AccountTypeSelectionScreen(self.menu, "kvk"))
+        await self.menu.push(MystatsTypeSelectionScreen(self.menu, "kvk"))
 
 
-class Mystats_AccountTypeSelectionScreen(menu.Screen):
+class MystatsTypeSelectionScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
@@ -138,15 +138,15 @@ class Mystats_AccountTypeSelectionScreen(menu.Screen):
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
         await self.menu.push(
-            Mystats_postStatsScreen(self.menu, ctx, self.acc_category, "main")
+            MystatsPostScreen(self.menu, ctx, self.acc_category, "main")
         )
 
-    @menu.button(label="2nd Account", style=hikari.ButtonStyle.SECONDARY)
+    @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
     async def second_account_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
         await self.menu.push(
-            Mystats_postStatsScreen(self.menu, ctx, self.acc_category, "alt")
+            MystatsPostScreen(self.menu, ctx, self.acc_category, "alt")
         )
 
     @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
@@ -154,11 +154,11 @@ class Mystats_AccountTypeSelectionScreen(menu.Screen):
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
         await self.menu.push(
-            Mystats_postStatsScreen(self.menu, ctx, self.acc_category, "farm")
+            MystatsPostScreen(self.menu, ctx, self.acc_category, "farm")
         )
 
 
-class Mystats_postStatsScreen(menu.Screen):
+class MystatsPostScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
@@ -172,21 +172,90 @@ class Mystats_postStatsScreen(menu.Screen):
         self.acc_type = acc_type
 
     async def build_content(self) -> menu.ScreenContent:
-        gov_user = rok_db.get_gov_user(self.ctx.user.id, stats="general")
+        gov_user = rok_db.get_gov_user(
+            self.ctx.user.id, self.acc_category, self.acc_type
+        )
         if not gov_user:
-            return menu.ScreenContent(f"No {self.acc_type} registered")
+            return menu.ScreenContent(f"No {self.acc_type} account registered")
 
-        for account_type, details in gov_user.items():
-            if account_type == self.acc_type:
-                if self.acc_category == "general":
-                    if not (
-                        embed := await stats_embed(
-                            details["id"], self.ctx.user, self.acc_category
-                        )
-                    ):
-                        return menu.ScreenContent(f"No {self.acc_type} registered")
-                    return menu.ScreenContent(embed=embed)
-                else:
-                    return menu.ScreenContent("placeholder Kvk")
+        embed = await stats_embed(self.ctx.user, gov_user["id"], self.acc_category)
+        return menu.ScreenContent(embed=embed)
 
-        return menu.ScreenContent(f"No {self.acc_type} registered")
+
+class UnlinkmeScreen(menu.Screen):
+    async def build_content(self) -> menu.ScreenContent:
+        return menu.ScreenContent("Which account would you like to unlink?")
+
+    @menu.button(label="Main Account")
+    async def main_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "main"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
+    async def second_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "alt"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
+    async def farm_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "farm"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    def account_exists(self, ctx: miru.ViewContext, acc_type: str) -> bool:
+        user = ctx.user
+        acc_id = rok_db.get_user_ids(user.id)[acc_type]
+        if not acc_id:
+            return False
+        return True
+
+
+class UnlinkmeConfirmationScreen(menu.Screen):
+    def __init__(
+        self,
+        menu: menu.Menu,
+        ctx: miru.ViewContext,
+        acc_type: str,
+    ):
+        super().__init__(menu)
+        self.ctx = ctx
+        self.acc_type = acc_type
+
+    async def build_content(self) -> menu.ScreenContent:
+        user = self.ctx.user
+        acc_id = rok_db.get_user_ids(user.id)[self.acc_type]
+        embed = hikari.Embed(
+            title="Are you sure you want to unlink this account?",
+            description=f"Username: {user.username}\nGovernor ID: {acc_id}",
+            color=hikari.Color.from_rgb(250, 0, 0),
+        )
+        return menu.ScreenContent(embed=embed)
+
+    @menu.button(label="Yes")
+    async def yes_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        rok_db.remove_id(ctx.user.id, self.acc_type)
+        await ctx.edit_response(
+            f"{self.acc_type.capitalize()} account unlinked",
+            components=None,
+            embeds=None,
+        )
+
+    @menu.button(label="No", style=hikari.ButtonStyle.DANGER)
+    async def no_button(self, ctx: miru.ViewContext, button: menu.ScreenButton) -> None:
+        await ctx.edit_response("Account unlinking cancelled", components=None)

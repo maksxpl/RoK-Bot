@@ -12,10 +12,31 @@ class Db:
         )  # Enable named column access in query results
         self.cursor = self.connection.cursor()
 
-    def get_gov_user(self, user_discord_id: int, stats: str) -> dict:
-        id_table = "basic_top_600" if stats == "general" else "kvk_top_600"
+    def get_gov_user(
+        self, user_discord_id: int, acc_category: str, acc_type: str
+    ) -> dict:
+        """
+        Fetches the Governor ID and Name associated with a Discord user ID based on the type.
 
-        # Fetch the row corresponding to the author_id
+        Args:
+            user_discord_id (int): The Discord ID of the user.
+            acc_category (str): The account category ('general' or 'kvk').
+            acc_type (str): The account type ('main', 'alt', 'farm').
+
+        Returns:
+            dict: A dictionary containing 'name' and 'id' of the governor, or None if no valid ID is found.
+        """
+        # Determine the correct table based on the account category
+        id_table = "basic_top_600" if acc_category == "general" else "kvk_top_600"
+
+        if acc_type == "main":
+            acc_id_type = "Governer ID"
+        elif acc_type == "alt":
+            acc_id_type = "ALT ID"
+        elif acc_type == "farm":
+            acc_id_type = "FARM ID"
+
+        # Fetch the row corresponding to the user_discord_id
         self.cursor.execute(
             'SELECT * FROM accounts WHERE "Discord ID" = ?', (user_discord_id,)
         )
@@ -24,39 +45,66 @@ class Db:
         if row is None:
             return None
 
-        # Collect IDs and their associated nicknames
-        gov_user_dict = {}
-        gov_id_columns = ["Governer ID", "ALT ID", "FARM ID"]
-        types = ["main", "alt", "farm"]
+        # Retrieve the governor ID for the specified account type
+        gov_id = row[acc_id_type]
+        if not gov_id:
+            return None
 
-        for idx, gov_id_col in enumerate(gov_id_columns):
-            gov_id = row[gov_id_col]
-            if gov_id:
-                self.cursor.execute(
-                    f'SELECT "Governor Name" FROM {id_table} WHERE "Governor ID" = ?',
-                    (gov_id,),
-                )
-                nickname_row = self.cursor.fetchone()
-                if nickname_row:
-                    gov_user_dict[types[idx]] = {
-                        "name": nickname_row["Governor Name"],
-                        "id": gov_id,
-                    }
+        # Query the appropriate table for the governor name
+        self.cursor.execute(
+            f'SELECT "Governor Name" FROM {id_table} WHERE "Governor ID" = ?',
+            (gov_id,),
+        )
+        nickname_row = self.cursor.fetchone()
 
-        return gov_user_dict
+        if nickname_row:
+            return {"name": nickname_row["Governor Name"], "id": gov_id}
 
-    def get_kvk_stats(self, gov_id: int, stats: str) -> dict:
+        # Return None if no matching governor name is found
+        return None
+
+    def get_user_ids(self, user_discord_id: int) -> dict:
+        """
+        Fetches the main, alt, and farm IDs associated with a Discord user ID.
+
+        Args:
+            user_discord_id (int): The Discord ID of the user.
+
+        Returns:
+            dict: A dictionary containing 'main', 'alt', and 'farm' IDs, or None if no valid ID is found.
+        """
+        # Query the database for the user's account IDs
+        self.cursor.execute(
+            'SELECT "Governer ID", "ALT ID", "FARM ID" FROM accounts WHERE "Discord ID" = ?',
+            (user_discord_id,),
+        )
+        row = self.cursor.fetchone()
+
+        # Check if any results were returned
+        if row is None:
+            return None
+
+        # Build and return the dictionary with account IDs
+        user_ids = {
+            "main": row["Governer ID"] if row["Governer ID"] else None,
+            "alt": row["ALT ID"] if row["ALT ID"] else None,
+            "farm": row["FARM ID"] if row["FARM ID"] else None,
+        }
+
+        return user_ids
+
+    def get_kvk_stats(self, gov_id: int, account_category: str) -> dict:
         """
         Get KvK stats for a player with the given governor ID.
 
         Args:
             gov_id (int): Governor ID.
-            stats (str): Type of stats to retrieve ("general" or "specific").
+            account_category (str): Type of stats to retrieve ("general" or "kvk").
 
         Returns:
             dict: Dictionary containing the player's stats.
         """
-        id_table = "basic_top_600" if stats == "general" else "kvk_top_600"
+        id_table = "basic_top_600" if account_category == "general" else "kvk_top_600"
 
         # Fetch the player's stats from the database
         self.cursor.execute(
@@ -69,7 +117,7 @@ class Db:
         # Convert the row to a dictionary
         return dict(row)
 
-    def get_discord_id(self, discord_id: int, governor_id: int, stats: str) -> str:
+    def get_discord_user(self, discord_id: int, governor_id: int, stats: str) -> str:
         """
         Get the Discord username associated with a governor ID.
 
@@ -133,7 +181,7 @@ class Db:
         return None
 
     def save_id(
-        self, author_id: int, author_name: str, governor_id: int, acctype: str
+        self, user_id: int, user_name: str, governor_id: int, acc_type: str
     ) -> None:
         """
         Save or update a governor ID association for a given Discord user ID.
@@ -144,28 +192,28 @@ class Db:
             governor_id (int): Governor ID.
             acctype (str): Account type ('main', 'alt', or 'farm').
         """
-        author_id_str = str(author_id)
+        author_id_str = str(user_id)
         gov_id_str = str(governor_id)
         column = None
 
-        if acctype == "main":
+        if acc_type == "main":
             column = "Governer ID"
-        elif acctype == "alt":
+        elif acc_type == "alt":
             column = "ALT ID"
-        elif acctype == "farm":
+        elif acc_type == "farm":
             column = "FARM ID"
 
         if column:
             # Check if the Discord ID already exists
             self.cursor.execute(
-                'SELECT * FROM accounts WHERE "Discord ID" = ?', (author_id,)
+                'SELECT * FROM accounts WHERE "Discord ID" = ?', (user_id,)
             )
             row = self.cursor.fetchone()
             if row:
                 # Update the existing row
                 self.cursor.execute(
-                    f"UPDATE accounts SET '{column}' = ? WHERE 'Discord ID' = ?",
-                    (gov_id_str, author_id_str),
+                    f'UPDATE accounts SET "Discord Username" = ?, "{column}" = ? WHERE "Discord ID" = ?',
+                    (user_name, gov_id_str, user_id),
                 )
             else:
                 # Insert a new row
@@ -174,12 +222,12 @@ class Db:
                     (
                         author_id_str,
                         gov_id_str,
-                        author_name,
+                        user_name,
                     ),
                 )
             self.connection.commit()
 
-    def remove_id(self, author_id: int, acctype: str) -> None:
+    def remove_id(self, author_id: int, acc_type: str) -> None:
         """
         Remove a governor ID associated with a Discord user ID and account type.
 
@@ -188,18 +236,18 @@ class Db:
             acctype (str): Account type ('main', 'alt', or 'farm').
         """
         author_id_str = str(author_id)
-        column = None
+        acc_id_type = None
 
-        if acctype == "main":
-            column = "Governer ID"
-        elif acctype == "alt":
-            column = "ALT ID"
-        elif acctype == "farm":
-            column = "FARM ID"
+        if acc_type == "main":
+            acc_id_type = "Governer ID"
+        elif acc_type == "alt":
+            acc_id_type = "ALT ID"
+        elif acc_type == "farm":
+            acc_id_type = "FARM ID"
 
-        if column:
+        if acc_id_type:
             self.cursor.execute(
-                f"UPDATE accounts SET '{column}' = NULL WHERE 'Discord ID' = ?",
+                f'UPDATE accounts SET "{acc_id_type}" = NULL WHERE "Discord ID" = ?',
                 (author_id_str,),
             )
             self.connection.commit()

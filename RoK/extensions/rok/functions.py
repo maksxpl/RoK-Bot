@@ -12,55 +12,98 @@ rok_db = Db()
 #     return digits
 
 
-async def stats_embed(gov_id: int, user: hikari.User, stats: str):
+async def stats_embed(user: hikari.User, gov_id: int, acc_category: str):
     """
-    builds embed from individual player stats.
+    Builds an embed from individual player stats based on the stats type.
 
     Args:
+        user (hikari.User): Hikari user object.
         gov_id (int): Governor ID.
-        user: Discord user.
+        acc_category (str): Determines whether to fetch 'general' or 'kvk' stats.
+
+    Returns:
+        hikari.Embed or None: The constructed embed or None if no stats are found.
     """
-    player_stats = rok_db.get_kvk_stats(gov_id, stats)
+    player_stats = rok_db.get_kvk_stats(gov_id, acc_category)
 
     if player_stats is None:
         return None
 
-    player_name = player_stats["Governor Name"]
-    player_id = player_stats["Governor ID"]
-    player_snapshot_power = player_stats["Power"]
-    player_current_points = player_stats["Kill Points"]
-    player_t4kills = player_stats["T4 Kills"]
-    player_t5kills = player_stats["T5 Kills"]
-    player_deads = player_stats["Deaths"]
-    vendetta = player_stats["Alliance"]
+    userpfp = (
+        user.avatar_url
+        or "https://media.discordapp.net/attachments/1076154233197445201/1127610236744773792/discord-black-icon-1.png"
+    )
 
-    if user.avatar_url:
-        userpfp = user.avatar_url
-    else:
-        userpfp = "https://media.discordapp.net/attachments/1076154233197445201/1127610236744773792/discord-black-icon-1.png"
+    # Create the embed object
+    embed = hikari.Embed(color=hikari.Color.from_rgb(0, 200, 250))
 
-    if player_stats:
-        embed = hikari.Embed(color=hikari.Color.from_rgb(0, 200, 250))
-
-        embed.title = f"Basic Stats :chart_with_upwards_trend: "
-
-        description = f"**Governor**: {player_name if player_name else '0'}\n**Governor ID**: {player_id if player_id else '0'}\n**Alliance**:{vendetta}\n**Power**: {player_snapshot_power if player_snapshot_power else '0'}\n**Kill Points**:{player_current_points if player_current_points else '0'}\n"
+    if acc_category == "general":
+        # General stats embed
+        embed.title = "Basic Stats :chart_with_upwards_trend:"
+        description = (
+            f"**Governor**: {player_stats.get('Governor Name', '0')}\n"
+            f"**Governor ID**: {player_stats.get('Governor ID', '0')}\n"
+            f"**Alliance**: {player_stats.get('Alliance', 'Unknown')}\n"
+            f"**Power**: {player_stats.get('Power', '0')}\n"
+            f"**Kill Points**: {player_stats.get('Kill Points', '0')}\n"
+        )
         embed.description = description
-
         embed.add_field(
             name="<:4_:1277422678470430750> T4 KILLS",
-            value=f"{player_t4kills}",
+            value=player_stats.get("T4 Kills", "0"),
             inline=True,
         )
         embed.add_field(
             name="\n<:5_:1277422745960841276> T5 KILLS",
-            value=f"{player_t5kills}",
+            value=player_stats.get("T5 Kills", "0"),
             inline=True,
         )
-        embed.add_field(name="\n:skull: DEATHS", value=f"{player_deads}", inline=True)
-
-        embed.set_footer(
-            text=f"Requested by @{user.username}       Updated: 19 August 2024 ",
-            icon=f"{userpfp}",
+        embed.add_field(
+            name="\n:skull: DEATHS", value=player_stats.get("Deaths", "0"), inline=True
         )
-        return embed
+    elif acc_category == "kvk":
+        # KvK stats embed
+        embed.title = "KvK Personal Stats :chart_with_upwards_trend:"
+        description = (
+            f"**Governor**: {player_stats.get('Governor Name', '0')}\n"
+            f"**Alliance**: {player_stats.get('Alliance', 'Unknown')}\n"
+            f"**Power**: {player_stats.get('Power', '0')}\n"
+            f"**Governor ID**: {player_stats.get('Governor ID', '0')}\n"
+        )
+        embed.description = description
+        embed.add_field(
+            name=":trophy: Rank",
+            value=player_stats.get("Rank", "Unranked"),
+            inline=True,
+        )
+        embed.add_field(
+            name="DKP Required",
+            value=player_stats.get("DKP Required", "0"),
+            inline=True,
+        )
+        embed.add_field(
+            name="DKP Achieved",
+            value=player_stats.get("DKP Achieved", "0"),
+            inline=True,
+        )
+        embed.add_field(
+            name="<:4_:1277422678470430750> T4 KILLS",
+            value=player_stats.get("T4 Kills", "0"),
+            inline=True,
+        )
+        embed.add_field(
+            name="\n<:5_:1277422745960841276> T5 KILLS",
+            value=player_stats.get("T5 Kills", "0"),
+            inline=True,
+        )
+        embed.add_field(
+            name="\n:skull: DEATHS", value=player_stats.get("Deaths", "0"), inline=True
+        )
+
+    # Set the footer
+    embed.set_footer(
+        text=f"Requested by @{user.username}       Updated: 19 August 2024 ",
+        icon=userpfp,
+    )
+
+    return embed
