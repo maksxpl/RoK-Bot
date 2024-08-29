@@ -39,7 +39,7 @@ bot.d.miru = miru.Client(bot)
 
 if __name__ == "__main__":
     # main modules
-    bot.load_extensions("extensions.rok.rok")
+    bot.load_extensions("extensions.rok.slash_commands")
     bot.load_extensions("extensions.listeners")
 
     # external modules
