@@ -25,6 +25,8 @@ async def on_error(event: lightbulb.CommandErrorEvent) -> None:
         )
     )
 
+    print(event.exception.original)
+
 
 def load(bot):
     bot.add_plugin(plugin)
