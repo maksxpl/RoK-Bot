@@ -1,13 +1,7 @@
 import hikari
 import lightbulb
 from extensions.rok.SQLite import Db
-from extensions.rok.views import (
-    CustomMenu,
-    LinkmeScreen,
-    MystatsScreen,
-    MystatsSelectModeView,
-    UnlinkmeScreen,
-)
+from extensions.rok.views import CustomMenu, LinkmeScreen, MystatsScreen, UnlinkmeScreen
 
 plugin = lightbulb.Plugin("slash_commands")
 
@@ -125,6 +119,50 @@ async def me(ctx: lightbulb.SlashContext) -> None:
     #     else:
     #         embed.add_field(key, f"-# Not found", inline=True)
 
+    await ctx.respond(embed=embed)
+
+
+@plugin.command()
+@lightbulb.command("total", "Fetch and display cumulative KvK stats of top 300 players")
+@lightbulb.implements(lightbulb.SlashCommand)
+async def total(ctx: lightbulb.Context) -> None:
+    global_stats = rok_db.get_kvk_top_300_global_stats()
+    if global_stats:
+        embed = hikari.Embed(
+            title="KvK stats of Top 300 by power",
+            description="- Born to Fight! Trained to Kill! Prepared to Die! -",
+            color=hikari.Color.from_rgb(0, 213, 255),
+        )
+        for key, value in global_stats.items():
+            value = format(value, ",")
+            embed.add_field(name=f"Total {key}", value=value or "No data", inline=True)
+        embed.set_image(
+            "https://cdn.discordapp.com/attachments/1276990017301905511/1278809400013881386/Group_1_2.png?ex=66d22790&is=66d0d610&hm=a4a7ab403813eb7a551554671bc27cfdea893114ecae009d8b807a890ae39579&"
+        )
+    else:
+        await ctx.respond("No stats available.")
+
+
+@plugin.command()
+@lightbulb.option(
+    "category",
+    "Select category",
+    required=True,
+    choices=["T4 Kills", "T5 Kills", "Deaths"],
+)
+@lightbulb.command("top10", "Fetch and display top 10 players in selected category")
+@lightbulb.implements(lightbulb.SlashCommand)
+async def top10(ctx: lightbulb.Context) -> None:
+    top_players = rok_db.get_kvk_top_x_player_stats(ctx.options.category)
+
+    embed = hikari.Embed(
+        title=f"Top 10 players by {ctx.options.category}",
+        color=hikari.Color.from_rgb(0, 250, 0),
+    )
+
+    for x, (player, stat) in enumerate(top_players.items(), 1):
+        # stat = format(int(stat), ",")
+        embed.add_field(f"{x}: {player}", f"<:4_:1277422678470430750> {stat}")
     await ctx.respond(embed=embed)
 
 

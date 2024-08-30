@@ -93,7 +93,7 @@ class Db:
 
         return user_ids
 
-    def get_kvk_stats(self, gov_id: int, account_category: str) -> dict:
+    def get_kvk_user_stats(self, gov_id: int, account_category: str) -> dict:
         """
         Get KvK stats for a player with the given governor ID.
 
@@ -116,6 +116,60 @@ class Db:
 
         # Convert the row to a dictionary
         return dict(row)
+
+    def get_kvk_top_300_global_stats(self) -> dict:
+        """
+        Sums top 300 numbers from the 'T4 Kills', 'T5 Kills', and 'Deaths' columns
+        from the 'kvk_top_600'.
+
+        Returns:
+            dict: A dictionary with the column names as keys and their sums as values.
+        """
+        self.cursor.execute(
+            """
+            SELECT 
+                SUM(CAST(REPLACE("T4 Kills", ',', '') AS INTEGER)) AS "T4 Kills",
+                SUM(CAST(REPLACE("T5 Kills", ',', '') AS INTEGER)) AS "T5 Kills",
+                SUM(CAST(REPLACE("Deaths", ',', '') AS INTEGER)) AS "Deaths"
+            FROM (
+                SELECT * FROM kvk_top_600 ORDER BY "Power" DESC LIMIT 300 
+            )
+            """
+        )
+
+        # Fetch the result which will contain the sums of each column
+        result = self.cursor.fetchone()
+
+        # Construct the dictionary from the fetched result
+        sums = {
+            "T4 Kills": result["T4 Kills"] if result["T4 Kills"] is not None else 0,
+            "T5 Kills": result["T5 Kills"] if result["T5 Kills"] is not None else 0,
+            "Deaths": result["Deaths"] if result["Deaths"] is not None else 0,
+        }
+
+        return sums
+
+    def get_kvk_top_x_player_stats(self, stat: str) -> dict:
+        """
+        Gets top 10 players in selected category
+
+        Returns:
+            dict: A dictionary with the top 10 players with assigned chosen stat.
+        """
+
+        query = f"""
+        SELECT "Governor Name", "{stat}"
+        FROM "kvk_top_600"
+        ORDER BY CAST(REPLACE("{stat}", ',', '') AS INTEGER) DESC
+        LIMIT 10
+        """
+
+        self.cursor.execute(query)
+        result = self.cursor.fetchall()
+
+        top_players = {player_name: score for player_name, score in result}
+
+        return top_players
 
     def get_discord_user(self, discord_id: int, governor_id: int, stats: str) -> str:
         """
