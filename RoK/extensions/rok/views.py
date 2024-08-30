@@ -101,6 +101,85 @@ class LinkmeAccontSelectionScreen(menu.Screen):
         self.menu.stop()
 
 
+class UnlinkmeScreen(menu.Screen):
+    async def build_content(self) -> menu.ScreenContent:
+        return menu.ScreenContent("Which account would you like to unlink?")
+
+    @menu.button(label="Main Account")
+    async def main_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "main"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
+    async def second_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "alt"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
+    async def farm_account_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        acc_type = "farm"
+        if self.account_exists(ctx, acc_type):
+            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
+        else:
+            await ctx.edit_response("Account not found", components=None)
+
+    def account_exists(self, ctx: miru.ViewContext, acc_type: str) -> bool:
+        user = ctx.user
+        acc_id = rok_db.get_user_ids(user.id)[acc_type]
+        if not acc_id:
+            return False
+        return True
+
+
+class UnlinkmeConfirmationScreen(menu.Screen):
+    def __init__(
+        self,
+        menu: menu.Menu,
+        ctx: miru.ViewContext,
+        acc_type: str,
+    ):
+        super().__init__(menu)
+        self.ctx = ctx
+        self.acc_type = acc_type
+
+    async def build_content(self) -> menu.ScreenContent:
+        user = self.ctx.user
+        acc_id = rok_db.get_user_ids(user.id)[self.acc_type]
+        embed = hikari.Embed(
+            title="Are you sure you want to unlink this account?",
+            description=f"Username: {user.username}\nGovernor ID: {acc_id}",
+            color=hikari.Color.from_rgb(250, 0, 0),
+        )
+        return menu.ScreenContent(embed=embed)
+
+    @menu.button(label="Yes")
+    async def yes_button(
+        self, ctx: miru.ViewContext, button: menu.ScreenButton
+    ) -> None:
+        rok_db.remove_id(ctx.user.id, self.acc_type)
+        await ctx.edit_response(
+            f"{self.acc_type.capitalize()} account unlinked",
+            components=None,
+            embeds=None,
+        )
+
+    @menu.button(label="No", style=hikari.ButtonStyle.DANGER)
+    async def no_button(self, ctx: miru.ViewContext, button: menu.ScreenButton) -> None:
+        await ctx.edit_response("Account unlinking cancelled", components=None)
+
+
 class MystatsScreen(menu.Screen):
     def __init__(self, menu: menu.Menu) -> None:
         super().__init__(menu)
@@ -180,82 +259,3 @@ class MystatsPostScreen(menu.Screen):
 
         embed = await stats_embed(self.ctx.user, gov_user["id"], self.acc_category)
         return menu.ScreenContent(embed=embed)
-
-
-class UnlinkmeScreen(menu.Screen):
-    async def build_content(self) -> menu.ScreenContent:
-        return menu.ScreenContent("Which account would you like to unlink?")
-
-    @menu.button(label="Main Account")
-    async def main_account_button(
-        self, ctx: miru.ViewContext, button: menu.ScreenButton
-    ) -> None:
-        acc_type = "main"
-        if self.account_exists(ctx, acc_type):
-            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
-        else:
-            await ctx.edit_response("Account not found", components=None)
-
-    @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
-    async def second_account_button(
-        self, ctx: miru.ViewContext, button: menu.ScreenButton
-    ) -> None:
-        acc_type = "alt"
-        if self.account_exists(ctx, acc_type):
-            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
-        else:
-            await ctx.edit_response("Account not found", components=None)
-
-    @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
-    async def farm_account_button(
-        self, ctx: miru.ViewContext, button: menu.ScreenButton
-    ) -> None:
-        acc_type = "farm"
-        if self.account_exists(ctx, acc_type):
-            await self.menu.push(UnlinkmeConfirmationScreen(self.menu, ctx, acc_type))
-        else:
-            await ctx.edit_response("Account not found", components=None)
-
-    def account_exists(self, ctx: miru.ViewContext, acc_type: str) -> bool:
-        user = ctx.user
-        acc_id = rok_db.get_user_ids(user.id)[acc_type]
-        if not acc_id:
-            return False
-        return True
-
-
-class UnlinkmeConfirmationScreen(menu.Screen):
-    def __init__(
-        self,
-        menu: menu.Menu,
-        ctx: miru.ViewContext,
-        acc_type: str,
-    ):
-        super().__init__(menu)
-        self.ctx = ctx
-        self.acc_type = acc_type
-
-    async def build_content(self) -> menu.ScreenContent:
-        user = self.ctx.user
-        acc_id = rok_db.get_user_ids(user.id)[self.acc_type]
-        embed = hikari.Embed(
-            title="Are you sure you want to unlink this account?",
-            description=f"Username: {user.username}\nGovernor ID: {acc_id}",
-            color=hikari.Color.from_rgb(250, 0, 0),
-        )
-        return menu.ScreenContent(embed=embed)
-
-    @menu.button(label="Yes")
-    async def yes_button(
-        self, ctx: miru.ViewContext, button: menu.ScreenButton
-    ) -> None:
-        rok_db.remove_id(ctx.user.id, self.acc_type)
-        await ctx.edit_response(
-            f"{self.acc_type.capitalize()} account unlinked",
-            components=None,
-            embeds=None,
-        )
-
-    @menu.button(label="No", style=hikari.ButtonStyle.DANGER)
-    async def no_button(self, ctx: miru.ViewContext, button: menu.ScreenButton) -> None:
-        await ctx.edit_response("Account unlinking cancelled", components=None)

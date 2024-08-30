@@ -9,39 +9,6 @@ rok_db = Db()
 
 
 @plugin.command
-## consider using options
-# @lightbulb.option(
-#     "category", "Select category", required=False, choices=["general", "kvk"]
-# )
-# @lightbulb.option(
-#     "account", "Select account", required=False, choices=["main", "alt", "farm"]
-# )
-@lightbulb.command("mystats", "Check your governor statistics")
-@lightbulb.implements(lightbulb.SlashCommand)
-async def mystats(ctx: lightbulb.SlashContext) -> None:
-    linked_ids = rok_db.get_user_ids(ctx.author.id)
-
-    if not linked_ids:
-        await ctx.respond(f"Sorry, I cannot find you! Please use linkme to link first.")
-        return
-
-    print(ctx.options.items())
-
-    ## check if all options were specfied, if so, skip to confirmation
-    # for key, value in ctx.options.items():
-    # if not value:
-    category_menu = CustomMenu(ctx.author)
-    builder = await category_menu.build_response_async(
-        plugin.app.d.miru,
-        MystatsScreen(category_menu),
-    )
-    await builder.create_initial_response(ctx.interaction)
-    plugin.app.d.miru.start_view(category_menu)
-    return
-    # await ctx.respond("skip to confirmation (placeholder)")
-
-
-@plugin.command
 @lightbulb.option("governor_id", "your governor id", int, required=True)
 @lightbulb.command("linkme", "Link your account")
 @lightbulb.implements(lightbulb.SlashCommand)
@@ -120,6 +87,39 @@ async def me(ctx: lightbulb.SlashContext) -> None:
     #         embed.add_field(key, f"-# Not found", inline=True)
 
     await ctx.respond(embed=embed)
+
+
+@plugin.command
+## consider using options
+# @lightbulb.option(
+#     "category", "Select category", required=False, choices=["general", "kvk"]
+# )
+# @lightbulb.option(
+#     "account", "Select account", required=False, choices=["main", "alt", "farm"]
+# )
+@lightbulb.command("mystats", "Check your governor statistics")
+@lightbulb.implements(lightbulb.SlashCommand)
+async def mystats(ctx: lightbulb.SlashContext) -> None:
+    linked_ids = rok_db.get_user_ids(ctx.author.id)
+
+    if not linked_ids:
+        await ctx.respond(f"Sorry, I cannot find you! Please use linkme to link first.")
+        return
+
+    print(ctx.options.items())
+
+    ## check if all options were specfied, if so, skip to confirmation
+    # for key, value in ctx.options.items():
+    # if not value:
+    category_menu = CustomMenu(ctx.author)
+    builder = await category_menu.build_response_async(
+        plugin.app.d.miru,
+        MystatsScreen(category_menu),
+    )
+    await builder.create_initial_response(ctx.interaction)
+    plugin.app.d.miru.start_view(category_menu)
+    return
+    # await ctx.respond("skip to confirmation (placeholder)")
 
 
 @plugin.command()
