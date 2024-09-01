@@ -1,7 +1,14 @@
 import hikari
 import lightbulb
+import miru
 from extensions.rok.SQLite import Db
-from extensions.rok.views import CustomMenu, LinkmeScreen, MystatsScreen, UnlinkmeScreen
+from extensions.rok.views import (
+    CustomMenu,
+    LinkmeScreen,
+    MystatsScreen,
+    Top10View,
+    UnlinkmeScreen,
+)
 
 plugin = lightbulb.Plugin("slash_commands")
 
@@ -153,17 +160,9 @@ async def total(ctx: lightbulb.Context) -> None:
 @lightbulb.command("top10", "Fetch and display top 10 players in selected category")
 @lightbulb.implements(lightbulb.SlashCommand)
 async def top10(ctx: lightbulb.Context) -> None:
-    top_players = rok_db.get_kvk_top_x_player_stats(ctx.options.category)
-
-    embed = hikari.Embed(
-        title=f"Top 10 players by {ctx.options.category}",
-        color=hikari.Color.from_rgb(0, 250, 0),
-    )
-
-    for x, (player, stat) in enumerate(top_players.items(), 1):
-        # stat = format(int(stat), ",")
-        embed.add_field(f"{x}: {player}", f"<:4_:1277422678470430750> {stat}")
-    await ctx.respond(embed=embed)
+    view = Top10View(category=ctx.options.category)
+    await ctx.respond("Hello miru!", components=view, embed=view.embed(ctx))
+    plugin.app.d.miru.start_view(view)
 
 
 def load(bot) -> None:

@@ -155,10 +155,12 @@ class Db:
 
         Returns:
             dict: A dictionary with the top 10 players with assigned chosen stat.
+
+            format: {player_name: {"player_id": player_id, "score": score}}
         """
 
         query = f"""
-        SELECT "Governor Name", "{stat}"
+        SELECT "Governor Name", "Governor ID", "{stat}"
         FROM "kvk_top_600"
         ORDER BY CAST(REPLACE("{stat}", ',', '') AS INTEGER) DESC
         LIMIT 10
@@ -167,7 +169,10 @@ class Db:
         self.cursor.execute(query)
         result = self.cursor.fetchall()
 
-        top_players = {player_name: score for player_name, score in result}
+        top_players = {
+            player_name: {"player_id": player_id, "score": score}
+            for player_name, player_id, score in result
+        }
 
         return top_players
 

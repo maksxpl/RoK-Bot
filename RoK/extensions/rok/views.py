@@ -1,3 +1,4 @@
+from datetime import timedelta
 import hikari
 import miru
 import miru.ext.menu
@@ -259,3 +260,44 @@ class MystatsPostScreen(menu.Screen):
 
         embed = await stats_embed(self.ctx.user, gov_user["id"], self.acc_category)
         return menu.ScreenContent(embed=embed)
+
+
+class Top10View(miru.View):
+    def __init__(
+        self,
+        *,
+        category,
+        timeout: float | int | timedelta | None = 120,
+        autodefer: bool | miru.AutodeferOptions = True,
+    ) -> None:
+        super().__init__(timeout=timeout, autodefer=autodefer)
+        self.category = category
+        self.toggle_state = "nicknames"
+
+    @miru.button(label="Toggle names")
+    async def toggleNames_button(
+        self, ctx: miru.ViewContext, button: miru.Button
+    ) -> None:
+        await ctx.edit_response(embed=self.embed(ctx))
+
+    def embed(self, ctx: miru.ViewContext):
+        top_players = rok_db.get_kvk_top_x_player_stats(self.category)
+        embed = hikari.Embed(
+            title=f"Top 10 players by {self.category}",
+            color=hikari.Color.from_rgb(0, 250, 0),
+        )
+
+        if self.toggle_state == "nicknames":
+            for x, (player, details) in enumerate(top_players.items(), 1):
+                embed.add_field(
+                    f"{x}: {player}", f"<:4_:1277422678470430750> {details['score']}"
+                )
+            self.toggle_state = "ids"
+        elif self.toggle_state == "ids":
+            for x, (_, details) in enumerate(top_players.items(), 1):
+                embed.add_field(
+                    f"{x}: {details['player_id']}",
+                    f"<:4_:1277422678470430750> {details['score']}",
+                )
+            self.toggle_state = "nicknames"
+        return embed
