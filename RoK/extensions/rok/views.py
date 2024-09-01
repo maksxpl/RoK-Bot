@@ -14,11 +14,6 @@ class CustomMenu(menu.Menu):
         super().__init__(timeout=timeout)
         self.author = author
 
-    async def on_timeout(self) -> None:
-        for button in self.children:
-            button.disabled = True
-        print("figure out how to fix on_timeout")
-
     async def view_check(self, ctx: miru.ViewContext) -> bool:
         if ctx.user.id != self.author.id:
             await ctx.respond(
@@ -27,6 +22,12 @@ class CustomMenu(menu.Menu):
             )
             return False
         return True
+
+    async def on_timeout(self) -> None:
+        if self.message:
+            for button in self.children:
+                button.disabled = True
+            await self.message.edit(components=self)
 
 
 class LinkmeScreen(menu.Screen):
@@ -263,14 +264,8 @@ class MystatsPostScreen(menu.Screen):
 
 
 class Top10View(miru.View):
-    def __init__(
-        self,
-        *,
-        category,
-        timeout: float | int | timedelta | None = 120,
-        autodefer: bool | miru.AutodeferOptions = True,
-    ) -> None:
-        super().__init__(timeout=timeout, autodefer=autodefer)
+    def __init__(self, category) -> None:
+        super().__init__(timeout="2")
         self.category = category
         self.toggle_state = "nicknames"
 
@@ -301,3 +296,8 @@ class Top10View(miru.View):
                 )
             self.toggle_state = "nicknames"
         return embed
+
+    async def on_timeout(self) -> None:
+        for button in self.children:
+            button.disabled = True
+        await self.message.edit(components=self)
