@@ -1,7 +1,11 @@
-from extensions.rok.SQLite import Db
 import hikari
+import lightbulb
+from data_manager import config
+from extensions.rok.SQLite import Db
 
 rok_db = Db()
+bot_config = config()["bot"]
+
 # def int_len(n) -> int:
 #     if n > 0:
 #         digits = int(math.log10(n)) + 1
@@ -10,6 +14,16 @@ rok_db = Db()
 #     else:
 #         digits = int(math.log10(-n)) + 2  # +1 if you don't count the '-'
 #     return digits
+
+
+async def is_admin(ctx: lightbulb.SlashContext):
+    admin_role_id = bot_config["owner_id"]
+    if ctx.member:
+        member_roles = [role.id for role in ctx.member.get_roles()]
+        member_is_owner = bool(ctx.author.id == bot_config["owner_id"])
+        return bool(member_is_owner or admin_role_id in member_roles)
+    else:
+        return False
 
 
 async def stats_embed(user: hikari.User, gov_id: int, acc_category: str):

@@ -11,10 +11,25 @@ async def on_ready(event: lightbulb.LightbulbStartedEvent) -> None:
     logging.info("RoK-bot has started!")
 
 
+#
+# Exceptions
+#
+
+
+@plugin.listener(lightbulb.CommandErrorEvent)
+async def on_check_failure(event: lightbulb.CommandErrorEvent) -> None:
+    # permissions
+    if isinstance(event.exception, lightbulb.errors.MissingRequiredPermission):
+        # administration only
+        if event.exception.missing_perms == hikari.Permissions.ADMINISTRATOR:
+            await event.context.respond("You need to be an admin to use this command.")
+
+
+# Command failed
 @plugin.listener(lightbulb.CommandErrorEvent)
 async def on_error(event: lightbulb.CommandErrorEvent) -> None:
     if not isinstance(event.exception, lightbulb.CommandInvocationError):
-        logging.warning(event.exception.original)
+        logging.warning(event.exception)
         return
 
     await event.context.respond(
