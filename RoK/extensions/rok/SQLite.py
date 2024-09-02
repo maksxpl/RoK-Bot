@@ -1,5 +1,7 @@
-import sqlite3
 import os
+import sqlite3
+from typing import Optional
+
 from data_manager import bot_dir
 
 
@@ -14,7 +16,7 @@ class Db:
 
     def get_gov_user(
         self, user_discord_id: int, acc_category: str, acc_type: str
-    ) -> dict:
+    ) -> Optional[dict]:
         """
         Fetches the Governor ID and Name associated with a Discord user ID based on the type.
 
@@ -24,7 +26,10 @@ class Db:
             acc_type (str): The account type ('main', 'alt', 'farm').
 
         Returns:
-            dict: A dictionary containing 'name' and 'id' of the governor, or None if no valid ID is found.
+            user (dict): A dictionary containing 'name' and 'id' of the governor, or None if no valid ID is found.
+
+            :format: {"name": str, "id": int}
+
         """
         # Determine the correct table based on the account category
         id_table = "basic_top_600" if acc_category == "general" else "kvk_top_600"
@@ -63,7 +68,7 @@ class Db:
         # Return None if no matching governor name is found
         return None
 
-    def get_user_ids(self, user_discord_id: int) -> dict:
+    def get_user_ids(self, user_discord_id: int) -> Optional[dict]:
         """
         Fetches the main, alt, and farm IDs associated with a Discord user ID.
 
@@ -72,6 +77,8 @@ class Db:
 
         Returns:
             dict: A dictionary containing 'main', 'alt', and 'farm' IDs, or None if no valid ID is found.
+
+            :format: {'main': int, 'alt': int, 'farm': int}
         """
         # Query the database for the user's account IDs
         self.cursor.execute(
@@ -93,7 +100,7 @@ class Db:
 
         return user_ids
 
-    def get_kvk_user_stats(self, gov_id: int, account_category: str) -> dict:
+    def get_kvk_user_stats(self, gov_id: int, account_category: str) -> Optional[dict]:
         """
         Get KvK stats for a player with the given governor ID.
 
@@ -176,14 +183,13 @@ class Db:
 
         return top_players
 
-    def get_discord_user(self, discord_id: int, governor_id: int, stats: str) -> str:
+    def get_discord_user(self, governor_id: int, stats: str) -> str:
         """
         Get the Discord username associated with a governor ID.
 
         Args:
-            discord_id (int): Discord user ID.
             governor_id (int): Governor ID.
-            stats (str): Indicates which table to use ('general' or other).
+            stats (str): Indicates which table to use ('general' or 'kvk').
 
         Returns:
             str: Discord username if found, or None.
@@ -213,7 +219,7 @@ class Db:
             int: Corresponding Discord ID or None if not found.
         """
         self.cursor.execute(
-            "SELECT 'Discord ID' FROM accounts WHERE 'Governer ID' = ?", (str(gov_id),)
+            'SELECT "Discord ID" FROM accounts WHERE "Governer ID" = ?', (str(gov_id),)
         )
         row = self.cursor.fetchone()
         if row:

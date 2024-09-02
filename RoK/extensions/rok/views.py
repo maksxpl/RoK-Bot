@@ -1,16 +1,18 @@
-from datetime import timedelta
+from typing import Optional, Union
+
 import hikari
+import lightbulb
 import miru
 import miru.ext.menu
-from extensions.rok.SQLite import Db
 from extensions.rok.functions import stats_embed
+from extensions.rok.SQLite import Db
 from miru.ext import menu
 
 rok_db = Db()
 
 
 class CustomMenu(menu.Menu):
-    def __init__(self, author, timeout: float = 60):
+    def __init__(self, author, timeout: float = 120):
         super().__init__(timeout=timeout)
         self.author = author
 
@@ -182,7 +184,7 @@ class UnlinkmeConfirmationScreen(menu.Screen):
         await ctx.edit_response("Account unlinking cancelled", components=None)
 
 
-class MystatsScreen(menu.Screen):
+class StatsScreen(menu.Screen):
     def __init__(self, menu: menu.Menu) -> None:
         super().__init__(menu)
 
@@ -193,16 +195,16 @@ class MystatsScreen(menu.Screen):
     async def general_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(MystatsTypeSelectionScreen(self.menu, "general"))
+        await self.menu.push(StatsTypeSelectionScreen(self.menu, "general"))
 
     @menu.button(label="KvK", style=hikari.ButtonStyle.SUCCESS)
     async def kvk_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(MystatsTypeSelectionScreen(self.menu, "kvk"))
+        await self.menu.push(StatsTypeSelectionScreen(self.menu, "kvk"))
 
 
-class MystatsTypeSelectionScreen(menu.Screen):
+class StatsTypeSelectionScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
@@ -218,54 +220,61 @@ class MystatsTypeSelectionScreen(menu.Screen):
     async def main_account_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(
-            MystatsPostScreen(self.menu, ctx, self.acc_category, "main")
-        )
+        await self.menu.push(StatsPostScreen(self.menu, ctx, self.acc_category, "main"))
 
     @menu.button(label="Alt Account", style=hikari.ButtonStyle.SECONDARY)
     async def second_account_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(
-            MystatsPostScreen(self.menu, ctx, self.acc_category, "alt")
-        )
+        await self.menu.push(StatsPostScreen(self.menu, ctx, self.acc_category, "alt"))
 
     @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
     async def farm_account_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        await self.menu.push(
-            MystatsPostScreen(self.menu, ctx, self.acc_category, "farm")
-        )
+        await self.menu.push(StatsPostScreen(self.menu, ctx, self.acc_category, "farm"))
 
 
-class MystatsPostScreen(menu.Screen):
+class StatsPostScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
-        ctx: miru.ViewContext,
+        ctx: Union[miru.ViewContext, lightbulb.SlashContext],
         acc_category: str,
         acc_type: str,
+        user_id: Optional[hikari.Snowflake] = None,
     ):
         super().__init__(menu)
         self.ctx = ctx
         self.acc_category = acc_category
         self.acc_type = acc_type
+        self.user_id = user_id
 
     async def build_content(self) -> menu.ScreenContent:
-        gov_user = rok_db.get_gov_user(
-            self.ctx.user.id, self.acc_category, self.acc_type
-        )
-        if not gov_user:
+        user = await self.get_user()
+        if self.user_id == None:
+            gov_user_id = rok_db.get_gov_user(
+                self.ctx.user.id, self.acc_category, self.acc_type
+            )["id"]
+        else:
+            gov_user_id = rok_db.get_user_ids(user.id)[self.acc_type]
+        if not gov_user_id:
             return menu.ScreenContent(f"No {self.acc_type} account registered")
 
-        embed = await stats_embed(self.ctx.user, gov_user["id"], self.acc_category)
+        embed = await stats_embed(user, gov_user_id, self.acc_category)
         return menu.ScreenContent(embed=embed)
+
+    async def get_user(self) -> hikari.User:
+        if self.user_id != None:
+            user_disc_id = rok_db.get_discord_from_id(self.user_id)
+            user = await self.ctx.bot.rest.fetch_user(user_disc_id)
+            return user
+        return self.ctx.user
 
 
 class Top10View(miru.View):
     def __init__(self, category) -> None:
-        super().__init__(timeout="2")
+        super().__init__()
         self.category = category
         self.toggle_state = "nicknames"
 
@@ -298,6 +307,7 @@ class Top10View(miru.View):
         return embed
 
     async def on_timeout(self) -> None:
-        for button in self.children:
-            button.disabled = True
-        await self.message.edit(components=self)
+        if self.message:
+            for button in self.children:
+                button.disabled = True
+            await self.message.edit(components=self)

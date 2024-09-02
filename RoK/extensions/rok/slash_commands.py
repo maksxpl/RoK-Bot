@@ -5,7 +5,8 @@ from extensions.rok.SQLite import Db
 from extensions.rok.views import (
     CustomMenu,
     LinkmeScreen,
-    MystatsScreen,
+    StatsPostScreen,
+    StatsScreen,
     Top10View,
     UnlinkmeScreen,
 )
@@ -97,42 +98,52 @@ async def me(ctx: lightbulb.SlashContext) -> None:
 
 
 @plugin.command
-## consider using options
-# @lightbulb.option(
-#     "category", "Select category", required=False, choices=["general", "kvk"]
-# )
-# @lightbulb.option(
-#     "account", "Select account", required=False, choices=["main", "alt", "farm"]
-# )
-@lightbulb.command("mystats", "Check your governor statistics")
+@lightbulb.option("id", "Governor account ID", str, required=False)
+@lightbulb.option(
+    "category", "Select category", required=False, choices=["general", "kvk"]
+)
+@lightbulb.option(
+    "account", "Select account", required=False, choices=["main", "alt", "farm"]
+)
+@lightbulb.command(
+    "stats", "Check governor account statistics (of your own account if no ID provided)"
+)
 @lightbulb.implements(lightbulb.SlashCommand)
-async def mystats(ctx: lightbulb.SlashContext) -> None:
+async def stats(ctx: lightbulb.SlashContext) -> None:
     linked_ids = rok_db.get_user_ids(ctx.author.id)
 
     if not linked_ids:
         await ctx.respond(f"Sorry, I cannot find you! Please use linkme to link first.")
         return
 
-    print(ctx.options.items())
+    settings_specified = True if ctx.options.account and ctx.options.category else False
+    stats_menu = CustomMenu(ctx.author)
 
-    ## check if all options were specfied, if so, skip to confirmation
-    # for key, value in ctx.options.items():
-    # if not value:
-    category_menu = CustomMenu(ctx.author)
-    builder = await category_menu.build_response_async(
-        plugin.app.d.miru,
-        MystatsScreen(category_menu),
-    )
-    await builder.create_initial_response(ctx.interaction)
-    plugin.app.d.miru.start_view(category_menu)
-    return
-    # await ctx.respond("skip to confirmation (placeholder)")
+    if settings_specified:
+        builder = await stats_menu.build_response_async(
+            plugin.app.d.miru,
+            StatsPostScreen(
+                stats_menu,
+                ctx,
+                ctx.options.category,
+                ctx.options.account,
+                ctx.options.id,
+            ),
+        )
+        await builder.create_initial_response(ctx.interaction)
+    else:
+        builder = await stats_menu.build_response_async(
+            plugin.app.d.miru,
+            StatsScreen(stats_menu),
+        )
+        await builder.create_initial_response(ctx.interaction)
+        plugin.app.d.miru.start_view(stats_menu)
 
 
 @plugin.command()
 @lightbulb.command("total", "Fetch and display cumulative KvK stats of top 300 players")
 @lightbulb.implements(lightbulb.SlashCommand)
-async def total(ctx: lightbulb.Context) -> None:
+async def total(ctx: lightbulb.SlashContext) -> None:
     global_stats = rok_db.get_kvk_top_300_global_stats()
     if global_stats:
         embed = hikari.Embed(
@@ -159,10 +170,11 @@ async def total(ctx: lightbulb.Context) -> None:
 )
 @lightbulb.command("top10", "Fetch and display top 10 players in selected category")
 @lightbulb.implements(lightbulb.SlashCommand)
-async def top10(ctx: lightbulb.Context) -> None:
+async def top10(ctx: lightbulb.SlashContext) -> None:
     view = Top10View(category=ctx.options.category)
-    await ctx.respond("Hello miru!", components=view, embed=view.embed(ctx))
-    plugin.app.d.miru.start_view(view)
+    response = await ctx.respond(components=view, embed=view.embed(ctx))
+    message = await response
+    plugin.app.d.miru.start_view(view, bind_to=message)
 
 
 def load(bot) -> None:
