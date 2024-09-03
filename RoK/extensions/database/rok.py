@@ -1,22 +1,20 @@
 import os
 import sqlite3
-from typing import Optional
+from typing import Optional, Union
 
+import hikari
 from data_manager import bot_dir
 
+db_path = os.path.join(bot_dir, "data", "rok.sqlite3")
+connection = sqlite3.connect(db_path)
+connection.row_factory = sqlite3.Row  # Enable named column access in query results
+cursor = connection.cursor()
 
-class Db:
-    def __init__(self):
-        self.db_path = os.path.join(bot_dir, "data", "rok.sqlite3")
-        self.connection = sqlite3.connect(self.db_path)
-        self.connection.row_factory = (
-            sqlite3.Row
-        )  # Enable named column access in query results
-        self.cursor = self.connection.cursor()
 
-    def get_gov_user(
+class GetUser:
+    def gov_user(
         self, user_discord_id: int, acc_category: str, acc_type: str
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, int]]:
         """
         Fetches the Governor ID and Name associated with a Discord user ID based on the type.
 
@@ -42,10 +40,10 @@ class Db:
             acc_id_type = "FARM ID"
 
         # Fetch the row corresponding to the user_discord_id
-        self.cursor.execute(
+        cursor.execute(
             'SELECT * FROM accounts WHERE "Discord ID" = ?', (user_discord_id,)
         )
-        row = self.cursor.fetchone()
+        row = cursor.fetchone()
 
         if row is None:
             return None
@@ -56,11 +54,11 @@ class Db:
             return None
 
         # Query the appropriate table for the governor name
-        self.cursor.execute(
+        cursor.execute(
             f'SELECT "Governor Name" FROM {id_table} WHERE "Governor ID" = ?',
             (gov_id,),
         )
-        nickname_row = self.cursor.fetchone()
+        nickname_row = cursor.fetchone()
 
         if nickname_row:
             return {"name": nickname_row["Governor Name"], "id": gov_id}
@@ -68,7 +66,7 @@ class Db:
         # Return None if no matching governor name is found
         return None
 
-    def get_user_ids(self, user_discord_id: int) -> Optional[dict]:
+    def gov_ids(self, user_discord_id: int) -> Optional[dict[str, int]]:
         """
         Fetches the main, alt, and farm IDs associated with a Discord user ID.
 
@@ -81,11 +79,11 @@ class Db:
             :format: {'main': int, 'alt': int, 'farm': int}
         """
         # Query the database for the user's account IDs
-        self.cursor.execute(
+        cursor.execute(
             'SELECT "Governer ID", "ALT ID", "FARM ID" FROM accounts WHERE "Discord ID" = ?',
             (user_discord_id,),
         )
-        row = self.cursor.fetchone()
+        row = cursor.fetchone()
 
         # Check if any results were returned
         if row is None:
@@ -100,7 +98,73 @@ class Db:
 
         return user_ids
 
-    def get_kvk_user_stats(self, gov_id: int, account_category: str) -> Optional[dict]:
+    def discord_username(self, governor_id: int, stats: str) -> str:
+        """
+        Get the Discord username associated with a governor ID.
+
+        Args:
+            governor_id (int): Governor ID.
+            stats (str): Indicates which table to use ('general' or 'kvk').
+
+        Returns:
+            str: Discord username if found, or None.
+        """
+        cursor = connection.cursor()
+
+        gov_id_str = str(governor_id)
+        id_table = "basic_top_600" if stats == "general" else "kvk_top_600"
+
+        # Ensure the column name is correctly referenced without extra quotes
+        cursor.execute(
+            f'SELECT "Governor Name" FROM {id_table} WHERE "Governor ID" = ?',
+            (gov_id_str,),
+        )
+        row = cursor.fetchone()["Governor Name"]
+        cursor.close()
+        return row
+
+    def discord_id_from_gov_id(
+        self, gov_id: Union[int, hikari.Snowflake]
+    ) -> int | None:
+        """
+        Get Discord ID associated with a governor ID.
+
+        Args:
+            gov_id (int): Governor ID.
+
+        Returns:
+            int: Corresponding Discord ID or None if not found.
+        """
+        cursor.execute(
+            'SELECT "Discord ID" FROM accounts WHERE "Governer ID" = ?', (str(gov_id),)
+        )
+        row = cursor.fetchone()
+        if row:
+            return int(row["Discord ID"])
+        return None
+
+    def get_gov_id_from_discord(self, author_id: int) -> int | None:
+        """
+        Get governor ID associated with a Discord ID.
+
+        Args:
+            author_id (int): Discord user ID.
+
+        Returns:
+            int: Corresponding governor ID or None if not found.
+        """
+        cursor.execute(
+            "SELECT 'Governer ID' FROM accounts WHERE 'Discord ID' = ?",
+            (str(author_id),),
+        )
+        row = cursor.fetchone()
+        if row and row["Governer ID"]:
+            return int(row["Governer ID"])
+        return None
+
+
+class KvK:
+    def user_stats(self, gov_id: int, account_category: str) -> Optional[dict]:
         """
         Get KvK stats for a player with the given governor ID.
 
@@ -114,17 +178,15 @@ class Db:
         id_table = "basic_top_600" if account_category == "general" else "kvk_top_600"
 
         # Fetch the player's stats from the database
-        self.cursor.execute(
-            f'SELECT * FROM {id_table} WHERE "Governor ID" = ?', (gov_id,)
-        )
-        row = self.cursor.fetchone()
+        cursor.execute(f'SELECT * FROM {id_table} WHERE "Governor ID" = ?', (gov_id,))
+        row = cursor.fetchone()
         if row is None:
             return None
 
         # Convert the row to a dictionary
         return dict(row)
 
-    def get_kvk_top_300_global_stats(self) -> dict:
+    def kvk_top_300_global_stats(self) -> dict:
         """
         Sums top 300 numbers from the 'T4 Kills', 'T5 Kills', and 'Deaths' columns
         from the 'kvk_top_600'.
@@ -132,7 +194,7 @@ class Db:
         Returns:
             dict: A dictionary with the column names as keys and their sums as values.
         """
-        self.cursor.execute(
+        cursor.execute(
             """
             SELECT 
                 SUM(CAST(REPLACE("T4 Kills", ',', '') AS INTEGER)) AS "T4 Kills",
@@ -145,7 +207,7 @@ class Db:
         )
 
         # Fetch the result which will contain the sums of each column
-        result = self.cursor.fetchone()
+        result = cursor.fetchone()
 
         # Construct the dictionary from the fetched result
         sums = {
@@ -156,7 +218,7 @@ class Db:
 
         return sums
 
-    def get_kvk_top_x_player_stats(self, stat: str) -> dict:
+    def kvk_top_x_player_stats(self, stat: str) -> dict:
         """
         Gets top 10 players in selected category
 
@@ -173,8 +235,8 @@ class Db:
         LIMIT 10
         """
 
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()
+        cursor.execute(query)
+        result = cursor.fetchall()
 
         top_players = {
             player_name: {"player_id": player_id, "score": score}
@@ -183,69 +245,9 @@ class Db:
 
         return top_players
 
-    def get_discord_user(self, governor_id: int, stats: str) -> str:
-        """
-        Get the Discord username associated with a governor ID.
 
-        Args:
-            governor_id (int): Governor ID.
-            stats (str): Indicates which table to use ('general' or 'kvk').
-
-        Returns:
-            str: Discord username if found, or None.
-        """
-        cursor = self.connection.cursor()
-
-        gov_id_str = str(governor_id)
-        id_table = "basic_top_600" if stats == "general" else "kvk_top_600"
-
-        # Ensure the column name is correctly referenced without extra quotes
-        cursor.execute(
-            f'SELECT "Governor Name" FROM {id_table} WHERE "Governor ID" = ?',
-            (gov_id_str,),
-        )
-        row = cursor.fetchone()["Governor Name"]
-        cursor.close()
-        return row
-
-    def get_discord_from_id(self, gov_id: int) -> int | None:
-        """
-        Get Discord ID associated with a governor ID.
-
-        Args:
-            gov_id (int): Governor ID.
-
-        Returns:
-            int: Corresponding Discord ID or None if not found.
-        """
-        self.cursor.execute(
-            'SELECT "Discord ID" FROM accounts WHERE "Governer ID" = ?', (str(gov_id),)
-        )
-        row = self.cursor.fetchone()
-        if row:
-            return int(row["Discord ID"])
-        return None
-
-    def get_id_from_discord(self, author_id: int) -> int | None:
-        """
-        Get governor ID associated with a Discord ID.
-
-        Args:
-            author_id (int): Discord user ID.
-
-        Returns:
-            int: Corresponding governor ID or None if not found.
-        """
-        self.cursor.execute(
-            "SELECT 'Governer ID' FROM accounts WHERE 'Discord ID' = ?",
-            (str(author_id),),
-        )
-        row = self.cursor.fetchone()
-        if row and row["Governer ID"]:
-            return int(row["Governer ID"])
-        return None
-
-    def save_id(
+class Id:
+    def save(
         self, user_id: int, user_name: str, governor_id: int, acc_type: str
     ) -> None:
         """
@@ -270,19 +272,17 @@ class Db:
 
         if column:
             # Check if the Discord ID already exists
-            self.cursor.execute(
-                'SELECT * FROM accounts WHERE "Discord ID" = ?', (user_id,)
-            )
-            row = self.cursor.fetchone()
+            cursor.execute('SELECT * FROM accounts WHERE "Discord ID" = ?', (user_id,))
+            row = cursor.fetchone()
             if row:
                 # Update the existing row
-                self.cursor.execute(
+                cursor.execute(
                     f'UPDATE accounts SET "Discord Username" = ?, "{column}" = ? WHERE "Discord ID" = ?',
                     (user_name, gov_id_str, user_id),
                 )
             else:
                 # Insert a new row
-                self.cursor.execute(
+                cursor.execute(
                     f"INSERT INTO accounts ('Discord ID', '{column}', 'Discord Username') VALUES (?, ?, ?)",
                     (
                         author_id_str,
@@ -290,9 +290,9 @@ class Db:
                         user_name,
                     ),
                 )
-            self.connection.commit()
+            connection.commit()
 
-    def remove_id(self, author_id: int, acc_type: str) -> None:
+    def remove(self, author_id: int, acc_type: str) -> None:
         """
         Remove a governor ID associated with a Discord user ID and account type.
 
@@ -311,8 +311,11 @@ class Db:
             acc_id_type = "FARM ID"
 
         if acc_id_type:
-            self.cursor.execute(
+            cursor.execute(
                 f'UPDATE accounts SET "{acc_id_type}" = NULL WHERE "Discord ID" = ?',
                 (author_id_str,),
             )
-            self.connection.commit()
+            connection.commit()
+
+
+# class gsheet:

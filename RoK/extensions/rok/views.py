@@ -5,10 +5,12 @@ import lightbulb
 import miru
 import miru.ext.menu
 from extensions.rok.functions import stats_embed
-from extensions.rok.SQLite import Db
+from extensions.database.rok import GetUser, Id, KvK
 from miru.ext import menu
 
-rok_db = Db()
+user_id = Id()
+get_rok_user = GetUser()
+kvk = KvK()
 
 
 class CustomMenu(menu.Menu):
@@ -37,7 +39,7 @@ class LinkmeScreen(menu.Screen):
         self,
         menu: menu.Menu,
         username: str,
-        gid: str,
+        gid: int,
     ) -> None:
         super().__init__(menu)
         self.username = username
@@ -70,7 +72,7 @@ class LinkmeAccontSelectionScreen(menu.Screen):
     def __init__(
         self,
         menu: menu.Menu,
-        gid: str,
+        gid: int,
     ) -> None:
         super().__init__(menu)
         self.gid = gid
@@ -80,7 +82,7 @@ class LinkmeAccontSelectionScreen(menu.Screen):
 
     @menu.button(label="Main Account")
     async def main_acc_button(self, ctx: miru.ViewContext, button: miru.Button) -> None:
-        rok_db.save_id(ctx.user.id, ctx.user.username, self.gid, "main")
+        user_id.save(ctx.user.id, ctx.user.username, self.gid, "main")
         await ctx.edit_response(
             content="You have been successfully registered.", components=[]
         )
@@ -90,7 +92,7 @@ class LinkmeAccontSelectionScreen(menu.Screen):
     async def second_acc_button(
         self, ctx: miru.ViewContext, button: miru.Button
     ) -> None:
-        rok_db.save_id(ctx.user.id, ctx.user.username, self.gid, "alt")
+        user_id.save(ctx.user.id, ctx.user.username, self.gid, "alt")
         await ctx.edit_response(
             content="You have been successfully registered.", components=[]
         )
@@ -98,7 +100,7 @@ class LinkmeAccontSelectionScreen(menu.Screen):
 
     @menu.button(label="Farm Account", style=hikari.ButtonStyle.SECONDARY)
     async def farm_acc_button(self, ctx: miru.ViewContext, button: miru.Button) -> None:
-        rok_db.save_id(ctx.user.id, ctx.user.username, self.gid, "farm")
+        user_id.save(ctx.user.id, ctx.user.username, self.gid, "farm")
         await ctx.edit_response(
             content="You have been successfully registered.", components=[]
         )
@@ -141,7 +143,7 @@ class UnlinkmeScreen(menu.Screen):
 
     def account_exists(self, ctx: miru.ViewContext, acc_type: str) -> bool:
         user = ctx.user
-        acc_id = rok_db.get_user_ids(user.id)[acc_type]
+        acc_id = get_rok_user.gov_ids(user.id)[acc_type]
         if not acc_id:
             return False
         return True
@@ -160,7 +162,8 @@ class UnlinkmeConfirmationScreen(menu.Screen):
 
     async def build_content(self) -> menu.ScreenContent:
         user = self.ctx.user
-        acc_id = rok_db.get_user_ids(user.id)[self.acc_type]
+        if acc := get_rok_user.gov_ids(user.id):
+            acc_id = acc[self.acc_type]
         embed = hikari.Embed(
             title="Are you sure you want to unlink this account?",
             description=f"Username: {user.username}\nGovernor ID: {acc_id}",
@@ -172,7 +175,7 @@ class UnlinkmeConfirmationScreen(menu.Screen):
     async def yes_button(
         self, ctx: miru.ViewContext, button: menu.ScreenButton
     ) -> None:
-        rok_db.remove_id(ctx.user.id, self.acc_type)
+        user_id.remove(ctx.user.id, self.acc_type)
         await ctx.edit_response(
             f"{self.acc_type.capitalize()} account unlinked",
             components=None,
@@ -252,22 +255,30 @@ class StatsPostScreen(menu.Screen):
 
     async def build_content(self) -> menu.ScreenContent:
         user = await self.get_user()
+
+        # if no id specified
         if self.user_id == None:
-            gov_user_id = rok_db.get_gov_user(
-                self.ctx.user.id, self.acc_category, self.acc_type
-            )["id"]
+            # get it from database
+            if gov_user := (
+                get_rok_user.gov_user(
+                    self.ctx.user.id, self.acc_category, self.acc_type
+                )
+            ):
+                gov_user_id = gov_user["id"]
+            # return if nothing was found
+            else:
+                return menu.ScreenContent(f"No {self.acc_type} account registered")
+
         else:
-            gov_user_id = rok_db.get_user_ids(user.id)[self.acc_type]
-        if not gov_user_id:
-            return menu.ScreenContent(f"No {self.acc_type} account registered")
+            gov_user_id = get_rok_user.gov_ids(user.id)[self.acc_type]
 
         embed = await stats_embed(user, gov_user_id, self.acc_category)
         return menu.ScreenContent(embed=embed)
 
     async def get_user(self) -> hikari.User:
-        if self.user_id != None:
-            user_disc_id = rok_db.get_discord_from_id(self.user_id)
-            user = await self.ctx.bot.rest.fetch_user(user_disc_id)
+        if self.user_id:
+            if user_disc_id := (get_rok_user.discord_id_from_gov_id(self.user_id)):
+                user = await self.ctx.bot.rest.fetch_user(user_disc_id)
             return user
         return self.ctx.user
 
@@ -285,7 +296,7 @@ class Top10View(miru.View):
         await ctx.edit_response(embed=self.embed(ctx))
 
     def embed(self, ctx: miru.ViewContext):
-        top_players = rok_db.get_kvk_top_x_player_stats(self.category)
+        top_players = kvk.kvk_top_x_player_stats(self.category)
         embed = hikari.Embed(
             title=f"Top 10 players by {self.category}",
             color=hikari.Color.from_rgb(0, 250, 0),

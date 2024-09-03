@@ -1,9 +1,9 @@
 import hikari
 import lightbulb
 from data_manager import config
-from extensions.rok.SQLite import Db
+from extensions.database.rok import KvK
 
-rok_db = Db()
+kvk = KvK()
 bot_config = config()["bot"]
 
 # def int_len(n) -> int:
@@ -38,7 +38,7 @@ async def stats_embed(user: hikari.User, gov_id: int, acc_category: str):
     Returns:
         hikari.Embed or None: The constructed embed or None if no stats are found.
     """
-    player_stats = rok_db.get_kvk_user_stats(gov_id, acc_category)
+    player_stats = kvk.user_stats(gov_id, acc_category)
 
     if player_stats is None:
         return None
