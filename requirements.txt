@@ -2,3 +2,6 @@ attrs==23.2.0
 hikari==2.0.0.dev126
 hikari-lightbulb==2.3.5
 hikari-miru==4.1.1
+gspread==6.1.2
+oauth2client==4.1.3
+

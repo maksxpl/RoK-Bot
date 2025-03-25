@@ -2,8 +2,10 @@ import os
 import sqlite3
 from typing import Optional, Union
 
+import gspread
 import hikari
 from data_manager import bot_dir
+from oauth2client.service_account import ServiceAccountCredentials
 
 db_path = os.path.join(bot_dir, "data", "rok.sqlite3")
 connection = sqlite3.connect(db_path)
@@ -38,6 +40,8 @@ class GetUser:
             acc_id_type = "ALT ID"
         elif acc_type == "farm":
             acc_id_type = "FARM ID"
+        else:
+            return None
 
         # Fetch the row corresponding to the user_discord_id
         cursor.execute(
@@ -154,7 +158,7 @@ class GetUser:
             int: Corresponding governor ID or None if not found.
         """
         cursor.execute(
-            "SELECT 'Governer ID' FROM accounts WHERE 'Discord ID' = ?",
+            'SELECT "Governer ID" FROM accounts WHERE "Discord ID" = ?',
             (str(author_id),),
         )
         row = cursor.fetchone()
@@ -318,4 +322,203 @@ class Id:
             connection.commit()
 
 
-# class gsheet:
+class GSheet:
+    def __init__(self, sheet_id: str):
+        self.sheet_id = sheet_id
+        self.sheet = self.setup_google_sheets()
+
+    def setup_google_sheets(self):
+        """
+        Initializes the Google Sheets API client using credentials from a JSON file.
+        """
+        credentials_path = os.path.join(bot_dir, "data", "creds.json")
+
+        # Set the Google Sheets API scope and authorize
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            credentials_path, scope
+        )
+        client = gspread.authorize(creds)
+
+        # Open the Google Sheet by ID
+        return client.open_by_key(self.sheet_id)
+
+    def normalize_headers(self, headers):
+        """Normalize headers by stripping spaces and converting to lowercase."""
+        return [header.strip().lower() for header in headers]
+
+    def fetch_sheet_data(self, worksheet_title: str, expected_headers: list):
+        worksheet = self.sheet.worksheet(worksheet_title)
+        records = worksheet.get_all_records()
+
+        # Normalize the expected headers and the headers in the sheet
+        normalized_expected_headers = self.normalize_headers(expected_headers)
+        normalized_sheet_headers = self.normalize_headers(records[0].keys())
+
+        # Check if all expected headers are present in the sheet headers
+        missing_headers = set(normalized_expected_headers) - set(
+            normalized_sheet_headers
+        )
+        if missing_headers:
+            raise ValueError(f"Missing headers in the sheet: {missing_headers}")
+
+        # Only keep records with expected headers
+        filtered_records = []
+        for record in records:
+            filtered_record = {
+                k: v
+                for k, v in record.items()
+                if k.strip().lower() in normalized_expected_headers
+            }
+            filtered_records.append(filtered_record)
+
+        return filtered_records
+
+    def sync_db_with_sheets(self):
+        create_accounts_table = """
+        CREATE TABLE IF NOT EXISTS accounts (
+            "Discord ID" TEXT,
+            "Discord Username" TEXT,
+            "Governor ID" TEXT,
+            "ALT ID" TEXT,
+            "FARM ID" TEXT
+        );
+        """
+
+        create_basic_top_600_table = """
+        CREATE TABLE IF NOT EXISTS basic_top_600 (
+            "Governor Name" TEXT,
+            "Governor ID" TEXT,
+            "Power" INTEGER,
+            "Kill Points" INTEGER,
+            "Deaths" INTEGER,
+            "T4 Kills" INTEGER,
+            "T5 Kills" INTEGER,
+            "Alliance" TEXT
+        );
+        """
+
+        create_kvk_top_600_table = """
+        CREATE TABLE IF NOT EXISTS kvk_top_600 (
+            "Governor Name" TEXT,
+            "Governor ID" TEXT,
+            "Power" INTEGER,
+            "Rank" INTEGER,
+            "DKP Required" INTEGER,
+            "DKP Achieved" INTEGER,
+            "Deaths" INTEGER,
+            "T4 Kills" INTEGER,
+            "T5 Kills" INTEGER,
+            "Alliance" TEXT
+        );
+        """
+
+        cursor.execute("DROP TABLE IF EXISTS accounts;")
+        cursor.execute("DROP TABLE IF EXISTS basic_top_600;")
+        cursor.execute("DROP TABLE IF EXISTS kvk_top_600;")
+
+        cursor.execute(create_accounts_table)
+        cursor.execute(create_basic_top_600_table)
+        cursor.execute(create_kvk_top_600_table)
+
+        # Define the expected headers for each sheet
+        accounts_headers = [
+            "Discord ID",
+            "Discord Username",
+            "Governor ID",
+            "ALT ID",
+            "FARM ID",
+        ]
+        basic_top_600_headers = [
+            "Governor Name",
+            "Governor ID",
+            "Power",
+            "Kill Points",
+            "Deaths",
+            "T4 Kills",
+            "T5 Kills",
+            "Alliance",
+        ]
+        kvk_top_600_headers = [
+            "Governor Name",
+            "Governor ID",
+            "Power",
+            "Rank",
+            "DKP Required",
+            "DKP Achieved",
+            "Deaths",
+            "T4 Kills",
+            "T5 Kills",
+            "Alliance",
+        ]
+
+        # Fetch and insert data for "accounts" table
+        accounts_data = self.fetch_sheet_data(
+            "ACCOUNTS LINKED TO BOTS", accounts_headers
+        )
+        for row in accounts_data:
+            cursor.execute(
+                """
+                INSERT INTO accounts ("Discord ID", "Discord Username", "Governor ID", "ALT ID", "FARM ID")
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    row.get("Discord ID"),
+                    row.get("Discord Username"),
+                    row.get("Governor ID"),
+                    row.get("ALT ID"),
+                    row.get("FARM ID"),
+                ),
+            )
+
+        # Fetch and insert data for "basic_top_600" table
+        basic_top_600_data = self.fetch_sheet_data(
+            "🤖BASIC STATS TOP 600 13-02-2024", basic_top_600_headers
+        )
+        for row in basic_top_600_data:
+            cursor.execute(
+                """
+                INSERT INTO basic_top_600 ("Governor Name", "Governor ID", "Power", "Kill Points", "Deaths", "T4 Kills", "T5 Kills", "Alliance")
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    row.get("Governor Name"),
+                    row.get("Governor ID"),
+                    row.get("Power"),
+                    row.get("Kill Points"),
+                    row.get("Deaths"),
+                    row.get("T4 Kills"),
+                    row.get("T5 Kills"),
+                    row.get("Alliance"),
+                ),
+            )
+
+        # Fetch and insert data for "kvk_top_600" table
+        kvk_top_600_data = self.fetch_sheet_data(
+            "KVK 2 STATS TOP 600", kvk_top_600_headers
+        )
+        for row in kvk_top_600_data:
+            cursor.execute(
+                """
+                INSERT INTO kvk_top_600 ("Governor Name", "Governor ID", "Power", "Rank", "DKP Required", "DKP Achieved", "Deaths", "T4 Kills", "T5 Kills", "Alliance")
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    row.get("Governor Name"),
+                    row.get("Governor ID"),
+                    row.get("Power"),
+                    row.get("Rank"),
+                    row.get("DKP Required"),
+                    row.get("DKP Achieved"),
+                    row.get("Deaths"),
+                    row.get("T4 Kills"),
+                    row.get("T5 Kills"),
+                    row.get("Alliance"),
+                ),
+            )
+
+        connection.commit()
+        print("Database has been synced with Google Sheets.")

@@ -10,12 +10,13 @@ from extensions.rok.views import (
     Top10View,
     UnlinkmeScreen,
 )
-from extensions.database.rok import GetUser, KvK
+from extensions.database.rok import GetUser, KvK, GSheet
 
 plugin = lightbulb.Plugin("slash_commands")
 
 get_rok_user = GetUser()
 kvk = KvK()
+gsheet_as_database_sin = GSheet("1tPcPUnAdWKzqcC6IdTjYFX5-N9wvVq_a3EIJa-kfdOo")
 
 
 @plugin.command
@@ -180,7 +181,18 @@ async def top10(ctx: lightbulb.SlashContext) -> None:
 @lightbulb.implements(lightbulb.SlashCommand)
 @administration_only
 async def sync_to_sheet(ctx: lightbulb.SlashContext) -> None:
-    await ctx.respond("test")
+    try:
+        response = await ctx.respond(
+            "Syncing database with Google Sheets...", flags=hikari.MessageFlag.EPHEMERAL
+        )
+        message = await response
+        gsheet_as_database_sin.sync_db_with_sheets()
+        await message.edit("Database successfully synced with Google Sheets.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        await message.edit(
+            "An error occurred while syncing the database. Please check the logs for details."
+        )
 
 
 def load(bot) -> None:
